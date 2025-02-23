@@ -26,9 +26,10 @@ public class CardFactory : ICardFactory
         if (_cardPool.Count > 0)
         {
             card = _cardPool.Dequeue();
-            card.transform.SetParent(_parentTransform);
-            card.gameObject.SetActive(true);
-            card.ResetCard(sprite, id); // Reset the card completely
+            card.transform.SetParent(_parentTransform, false);
+            //card.gameObject.SetActive(true);
+            card.ResetCard(sprite, id);
+            card.FlipBackInstant();
         }
         else
         {
@@ -41,7 +42,7 @@ public class CardFactory : ICardFactory
 
     public void ReturnCard(Card card)
     {
-        card.gameObject.SetActive(false);
+        //card.gameObject.SetActive(false);
         _cardPool.Enqueue(card);
     }
 }

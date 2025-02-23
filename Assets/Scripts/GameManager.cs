@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -25,48 +26,54 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Text turnsText;
     [SerializeField] private Text timerText;
     [SerializeField] private Text modeText;
-    [SerializeField] private Button resetButton;  // Add Reset Button
-
+    [SerializeField] private Button resetButton;
 
     [Header("Game Settings")]
     [SerializeField] private GameMode currentGameMode = GameMode.WithoutTimer;
     [SerializeField] private int maxTurns = 20;
     [SerializeField] private float timeLimit = 60f;
 
-    private List<Card> cards;
-    private Card firstSelectedCard;
-    private Card secondSelectedCard;
+    private List<Card> _cards;
+    private Card _firstSelectedCard;
+    private Card _secondSelectedCard;
 
-    private int matches;
-    private int turns;
-    private bool isProcessing;
-    private bool isGameOver;
+    private int _matches;
+    private int _turns;
+    private bool _isProcessing;
+    private bool _isGameOver;
 
-    private float timer;
-    private bool canClick = true;
+    private float _timer;
+    private bool _canClick = true;
 
-    private static readonly WaitForSeconds matchDelay = new WaitForSeconds(0.5f);
+    public float  matchDelay = 0.4f;
 
     private void Start()
     {
         InitializeAudio();
         StartLevel(rows, columns, currentGameMode);
         resetButton.gameObject.SetActive(false);
-        if (resetButton != null)
-            resetButton.onClick.AddListener(ResetGame);
+        resetButton.onClick.AddListener(ResetGame);
+        timerText.gameObject.SetActive(currentGameMode == GameMode.TimerMode);
+        turnsText.gameObject.SetActive(currentGameMode != GameMode.TimerMode);
     }
+
     public void ResetGame()
     {
-        isGameOver = false;
-        firstSelectedCard = null;
-        secondSelectedCard = null;
-        canClick = true;
+        _isGameOver = false;
+        _firstSelectedCard = null;
+        _secondSelectedCard = null;
+        _canClick = true;
+
+        foreach (var card in _cards)
+        {
+            card.gameObject.SetActive(true); // Ensure cards are visible
+        }
+
         StartLevel(rows, columns, currentGameMode);
         Logger.Log("Game Reset");
-
-        if (resetButton != null)
-            resetButton.gameObject.SetActive(false); // Hide reset button until next game end
+        resetButton.gameObject.SetActive(false);
     }
+
     private void InitializeAudio()
     {
         if (Data && AudioManager.Instance)
@@ -76,112 +83,115 @@ public class GameManager : MonoBehaviour
     public void StartLevel(int rows, int columns, GameMode gameMode)
     {
         ResetGameVariables(gameMode);
-
         if (Data)
-            cards = cardGrid.GenerateGrid(rows, columns, Data.cardSprites, OnCardClicked);
-
+            _cards = cardGrid.GenerateGrid(rows, columns, Data.cardSprites, OnCardClicked);
         UpdateUI();
     }
 
     private void ResetGameVariables(GameMode gameMode)
     {
-        matches = turns = 0;
-        isProcessing = isGameOver = false;
-        timer = timeLimit;
+        _matches = _turns = 0;
+        _isProcessing = _isGameOver = false;
+        _timer = timeLimit;
         currentGameMode = gameMode;
-        canClick = true;
+        _canClick = true;
     }
 
     private void Update()
     {
-        if (isGameOver) return;
+        if (_isGameOver) return;
 
         if (currentGameMode == GameMode.TimerMode)
             UpdateTimer();
-        else if (currentGameMode == GameMode.LimitedTurnsMode && turns >= maxTurns)
+        else if (currentGameMode == GameMode.LimitedTurnsMode && _turns >= maxTurns)
             GameOver("Out of turns!");
     }
 
     private void UpdateTimer()
     {
-        timer -= Time.deltaTime;
-        if (timer <= 0) GameOver("Time's up!");
+        _timer -= Time.deltaTime;
+        if (_timer <= 0) GameOver("Time's up!");
         UpdateTimerUI();
     }
 
     private void OnCardClicked(Card clickedCard)
     {
-        if (!canClick || clickedCard.IsFlipping || clickedCard == firstSelectedCard || isGameOver) return;
+        if (!_canClick || clickedCard.IsFlipping || clickedCard == _firstSelectedCard || _isGameOver) return;
 
         AudioManager.Instance?.PlaySFX(Data.flipSound);
         clickedCard.Flip(true);
 
-        if (firstSelectedCard == null)
-            firstSelectedCard = clickedCard;
+        if (_firstSelectedCard == null)
+        {
+            _firstSelectedCard = clickedCard;
+        }
         else
         {
-            secondSelectedCard = clickedCard;
-            turns++;
-            canClick = false;
+            Logger.Log("CheckMatch Start");
+            _secondSelectedCard = clickedCard;
+            _turns++;
+            _canClick = false;
             StartCoroutine(CheckMatch());
         }
     }
 
     private IEnumerator CheckMatch()
     {
-        yield return matchDelay;
-
-        if (firstSelectedCard.Id == secondSelectedCard.Id)
+        yield return new WaitForSeconds(matchDelay);
+        Logger.Log("Checking");
+        if (_firstSelectedCard.Id == _secondSelectedCard.Id)
+        {
             HandleMatch();
+        }
         else
         {
-            firstSelectedCard.Flip(false);
-            secondSelectedCard.Flip(false);
+            Logger.Log("not matched");
+            _firstSelectedCard.Flip(false);
+            _secondSelectedCard.Flip(false);
         }
 
-        firstSelectedCard = secondSelectedCard = null;
-        canClick = true;
+        _firstSelectedCard = _secondSelectedCard = null;
+        _canClick = true;
         UpdateUI();
     }
 
     private void HandleMatch()
     {
-        firstSelectedCard.Match();
-        secondSelectedCard.Match();
-        matches++;
+        _firstSelectedCard.Match();
+        _secondSelectedCard.Match();
+        _matches++;
 
         AudioManager.Instance?.PlaySFX(Data.matchSound);
 
-        if (matches == cards.Count / 2)
+        if (_matches == _cards.Count / 2)
             OnGameWon();
     }
 
     private void UpdateUI()
     {
-        scoreText.text = $"Matches: {matches}";
-        turnsText.text = currentGameMode == GameMode.LimitedTurnsMode ? $"Turns: {turns}/{maxTurns}" : $"Turns: {turns}";
-        timerText.gameObject.SetActive(currentGameMode == GameMode.TimerMode);
-        turnsText.gameObject.SetActive(currentGameMode != GameMode.TimerMode);
+        scoreText.text = $"Matches: {_matches}";
+        turnsText.text = currentGameMode == GameMode.LimitedTurnsMode ? $"Turns: {_turns}/{maxTurns}" : $"Turns: {_turns}";
+
         modeText.text = $"Mode: {currentGameMode}";
     }
 
     private void UpdateTimerUI()
     {
-        timerText.text = $"Time: {Mathf.Max(0, Mathf.Ceil(timer))}s";
+        timerText.text = $"Time: {Mathf.Max(0, Mathf.Ceil(_timer))}s";
     }
 
     private void OnGameWon()
     {
-        isGameOver = true;
+        _isGameOver = true;
         AudioManager.Instance?.PlaySFX(Data.winSound);
-        LeaderboardManager.Instance?.SaveScore(turns);
-        Logger.Log($"You Win! Turns: {turns}");
+        LeaderboardManager.Instance?.SaveScore(_turns);
+        Logger.Log($"You Win! Turns: {_turns}");
         resetButton.gameObject.SetActive(true);
     }
 
     private void GameOver(string message)
     {
-        isGameOver = true;
+        _isGameOver = true;
         resetButton.gameObject.SetActive(true);
         Logger.Log(message);
     }
