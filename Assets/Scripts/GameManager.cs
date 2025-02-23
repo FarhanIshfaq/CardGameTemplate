@@ -3,19 +3,17 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
-
 public enum GameMode
 {
     WithoutTimer,
     TimerMode,
     LimitedTurnsMode
 }
+
 public class GameManager : MonoBehaviour
 {
-
-
     [Header("Scriptable Objects")]
-    [SerializeField] private GameData data;
+    [SerializeField] private GameData Data;
 
     [Header("Grid Settings")]
     [SerializeField] private CardGrid cardGrid;
@@ -27,6 +25,8 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Text turnsText;
     [SerializeField] private Text timerText;
     [SerializeField] private Text modeText;
+    [SerializeField] private Button resetButton;  // Add Reset Button
+
 
     [Header("Game Settings")]
     [SerializeField] private GameMode currentGameMode = GameMode.WithoutTimer;
@@ -43,6 +43,7 @@ public class GameManager : MonoBehaviour
     private bool isGameOver;
 
     private float timer;
+    private bool canClick = true;
 
     private static readonly WaitForSeconds matchDelay = new WaitForSeconds(0.5f);
 
@@ -50,20 +51,34 @@ public class GameManager : MonoBehaviour
     {
         InitializeAudio();
         StartLevel(rows, columns, currentGameMode);
+        resetButton.gameObject.SetActive(false);
+        if (resetButton != null)
+            resetButton.onClick.AddListener(ResetGame);
     }
+    public void ResetGame()
+    {
+        isGameOver = false;
+        firstSelectedCard = null;
+        secondSelectedCard = null;
+        canClick = true;
+        StartLevel(rows, columns, currentGameMode);
+        Logger.Log("Game Reset");
 
+        if (resetButton != null)
+            resetButton.gameObject.SetActive(false); // Hide reset button until next game end
+    }
     private void InitializeAudio()
     {
-        if (data && AudioManager.Instance)
-            AudioManager.Instance.PlayMusic(data.backgroundMusic);
+        if (Data && AudioManager.Instance)
+            AudioManager.Instance.PlayMusic(Data.backgroundMusic);
     }
 
     public void StartLevel(int rows, int columns, GameMode gameMode)
     {
         ResetGameVariables(gameMode);
 
-        if (data)
-            cards = cardGrid.GenerateGrid(rows, columns, data.cardSprites, OnCardClicked);
+        if (Data)
+            cards = cardGrid.GenerateGrid(rows, columns, Data.cardSprites, OnCardClicked);
 
         UpdateUI();
     }
@@ -74,43 +89,40 @@ public class GameManager : MonoBehaviour
         isProcessing = isGameOver = false;
         timer = timeLimit;
         currentGameMode = gameMode;
+        canClick = true;
     }
 
     private void Update()
     {
         if (isGameOver) return;
 
-        switch (currentGameMode)
-        {
-            case GameMode.TimerMode:
-                timer -= Time.deltaTime;
-                if (timer <= 0) GameOver("Time's up!");
-                UpdateTimerUI();
-                break;
+        if (currentGameMode == GameMode.TimerMode)
+            UpdateTimer();
+        else if (currentGameMode == GameMode.LimitedTurnsMode && turns >= maxTurns)
+            GameOver("Out of turns!");
+    }
 
-            case GameMode.LimitedTurnsMode:
-                if (turns >= maxTurns) GameOver("Out of turns!");
-                break;
-        }
+    private void UpdateTimer()
+    {
+        timer -= Time.deltaTime;
+        if (timer <= 0) GameOver("Time's up!");
+        UpdateTimerUI();
     }
 
     private void OnCardClicked(Card clickedCard)
     {
-        if (isProcessing || clickedCard == firstSelectedCard || isGameOver) return;
+        if (!canClick || clickedCard.IsFlipping || clickedCard == firstSelectedCard || isGameOver) return;
 
-        AudioManager.Instance?.PlaySFX(data.flipSound);
-
-        clickedCard.Flip();
+        AudioManager.Instance?.PlaySFX(Data.flipSound);
+        clickedCard.Flip(true);
 
         if (firstSelectedCard == null)
-        {
             firstSelectedCard = clickedCard;
-        }
         else
         {
             secondSelectedCard = clickedCard;
             turns++;
-            isProcessing = true;
+            canClick = false;
             StartCoroutine(CheckMatch());
         }
     }
@@ -120,18 +132,15 @@ public class GameManager : MonoBehaviour
         yield return matchDelay;
 
         if (firstSelectedCard.Id == secondSelectedCard.Id)
-        {
             HandleMatch();
-        }
         else
         {
-            firstSelectedCard.FlipBack();
-            secondSelectedCard.FlipBack();
+            firstSelectedCard.Flip(false);
+            secondSelectedCard.Flip(false);
         }
 
         firstSelectedCard = secondSelectedCard = null;
-        isProcessing = false;
-
+        canClick = true;
         UpdateUI();
     }
 
@@ -141,7 +150,7 @@ public class GameManager : MonoBehaviour
         secondSelectedCard.Match();
         matches++;
 
-        AudioManager.Instance?.PlaySFX(data.matchSound);
+        AudioManager.Instance?.PlaySFX(Data.matchSound);
 
         if (matches == cards.Count / 2)
             OnGameWon();
@@ -150,15 +159,9 @@ public class GameManager : MonoBehaviour
     private void UpdateUI()
     {
         scoreText.text = $"Matches: {matches}";
-
-        if (currentGameMode == GameMode.LimitedTurnsMode)
-            turnsText.text = $"Turns: {turns}/{maxTurns}";
-        else
-            turnsText.text = $"Turns: {turns}";
-
+        turnsText.text = currentGameMode == GameMode.LimitedTurnsMode ? $"Turns: {turns}/{maxTurns}" : $"Turns: {turns}";
         timerText.gameObject.SetActive(currentGameMode == GameMode.TimerMode);
         turnsText.gameObject.SetActive(currentGameMode != GameMode.TimerMode);
-
         modeText.text = $"Mode: {currentGameMode}";
     }
 
@@ -170,14 +173,16 @@ public class GameManager : MonoBehaviour
     private void OnGameWon()
     {
         isGameOver = true;
-        AudioManager.Instance?.PlaySFX(data.winSound);
+        AudioManager.Instance?.PlaySFX(Data.winSound);
         LeaderboardManager.Instance?.SaveScore(turns);
-        Debug.Log($"You Win! Turns: {turns}");
+        Logger.Log($"You Win! Turns: {turns}");
+        resetButton.gameObject.SetActive(true);
     }
 
     private void GameOver(string message)
     {
         isGameOver = true;
-        Debug.Log(message);
+        resetButton.gameObject.SetActive(true);
+        Logger.Log(message);
     }
 }

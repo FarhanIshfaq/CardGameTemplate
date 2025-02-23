@@ -1,13 +1,31 @@
 using UnityEngine;
+using System.Collections;
+using System.Collections.Generic;
 
 public class AudioManager : SingletonBase<AudioManager>
 {
-
     [SerializeField] private AudioSource musicSource;
-    [SerializeField] private AudioSource sfxSource;
+    [SerializeField] private AudioSource sfxSourcePrefab;
 
+    private readonly Queue<AudioSource> sfxPool = new Queue<AudioSource>();
+    private const int PoolSize = 2;
 
-    // Play background music with loop option
+    protected override void Awake()
+    {
+        base.Awake();
+        InitializePool();
+    }
+
+    private void InitializePool()
+    {
+        for (int i = 0; i < PoolSize; i++)
+        {
+            AudioSource sfx = Instantiate(sfxSourcePrefab, transform);
+            sfx.gameObject.SetActive(false);
+            sfxPool.Enqueue(sfx);
+        }
+    }
+
     public void PlayMusic(AudioClip clip, bool loop = true)
     {
         if (musicSource.clip == clip) return;
@@ -17,26 +35,45 @@ public class AudioManager : SingletonBase<AudioManager>
         musicSource.Play();
     }
 
-    // Stop background music
-    public void StopMusic()
+    public IEnumerator FadeMusic(float targetVolume, float duration)
     {
-        musicSource.Stop();
+        float startVolume = musicSource.volume;
+        float elapsed = 0f;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            musicSource.volume = Mathf.Lerp(startVolume, targetVolume, elapsed / duration);
+            yield return null;
+        }
+
+        musicSource.volume = targetVolume;
     }
 
-    // Play a single sound effect
     public void PlaySFX(AudioClip clip, float volume = 1f)
     {
-        sfxSource.PlayOneShot(clip, volume);
+        if (sfxPool.Count == 0) return;
+
+        AudioSource sfx = sfxPool.Dequeue();
+        sfx.gameObject.SetActive(true);
+        sfx.volume = volume;
+        sfx.clip = clip;
+        sfx.Play();
+
+        StartCoroutine(ReturnToPool(sfx, clip.length));
     }
 
-    // Volume Control
-    public void SetMusicVolume(float volume)
+    private IEnumerator ReturnToPool(AudioSource sfx, float delay)
     {
-        musicSource.volume = Mathf.Clamp01(volume);
+        yield return new WaitForSeconds(delay);
+        sfx.gameObject.SetActive(false);
+        sfxPool.Enqueue(sfx);
     }
 
+    public void SetMusicVolume(float volume) => musicSource.volume = Mathf.Clamp01(volume);
     public void SetSFXVolume(float volume)
     {
-        sfxSource.volume = Mathf.Clamp01(volume);
+        foreach (AudioSource sfx in sfxPool)
+            sfx.volume = Mathf.Clamp01(volume);
     }
 }

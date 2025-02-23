@@ -13,21 +13,26 @@ public class CardGrid : MonoBehaviour
 
     public List<Card> GenerateGrid(int rows, int columns, Sprite[] cardSprites, System.Action<Card> onCardClicked)
     {
-        ClearGrid();
-
-        // Initialize the factory with the prefab and parent transform
-        cardFactory = new CardFactory(cardPrefab, transform);
+        ClearGrid(); // Return cards to the pool
+        if (cardFactory == null)
+            cardFactory = new CardFactory(cardPrefab, transform); // Initialize factory once
 
         gridLayoutGroup.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
         gridLayoutGroup.constraintCount = columns;
 
         List<Sprite> spriteList = GenerateCardSpritePairs(rows * columns, cardSprites);
-        ushort uniqueID = 0;
+
+        Dictionary<Sprite, ushort> spriteIdMap = new Dictionary<Sprite, ushort>();
+        ushort currentID = 0;
 
         foreach (Sprite sprite in spriteList)
         {
-            // Use the factory to create cards
-            Card card = cardFactory.CreateCard(sprite, uniqueID++, onCardClicked);
+            if (!spriteIdMap.ContainsKey(sprite))
+                spriteIdMap[sprite] = currentID++;
+
+            Card card = cardFactory.CreateCard(sprite, spriteIdMap[sprite]);
+            card.OnCardClicked.RemoveAllListeners(); // Ensure no duplicate listeners
+            card.OnCardClicked.AddListener(onCardClicked.Invoke);
             cards.Add(card);
         }
 
@@ -38,7 +43,7 @@ public class CardGrid : MonoBehaviour
     {
         foreach (Card card in cards)
         {
-            Destroy(card.gameObject);
+            cardFactory.ReturnCard(card); // Return card to pool
         }
         cards.Clear();
     }

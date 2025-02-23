@@ -9,7 +9,7 @@ public class LeaderboardManager : SingletonBase<LeaderboardManager>
     private readonly List<int> scores = new List<int>();
     private const int MaxScores = 5;
 
-    private void Awake()
+    protected override void Awake()
     {
         LoadScores();
     }

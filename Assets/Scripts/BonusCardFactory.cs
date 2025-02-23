@@ -11,11 +11,15 @@ public class BonusCardFactory : ICardFactory
         _parentTransform = parentTransform;
     }
 
-    public Card CreateCard(Sprite sprite, ushort id, System.Action<Card> onClickCallback)
+    public Card CreateCard(Sprite sprite, ushort id)
     {
         GameObject cardObject = Object.Instantiate(_bonusCardPrefab, _parentTransform);
         Card card = cardObject.GetComponent<Card>();
-        card.Initialize(sprite, id, onClickCallback);
+        card.Initialize(sprite, id);
         return card;
+    }
+    public void ReturnCard(Card card)
+    {
+        card.gameObject.SetActive(false);
     }
 }
