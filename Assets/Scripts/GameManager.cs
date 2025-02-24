@@ -26,6 +26,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Text turnsText;
     [SerializeField] private Text timerText;
     [SerializeField] private Text modeText;
+    [SerializeField] private Text comboText;
     [SerializeField] private Button resetButton;
 
     [Header("Game Settings")]
@@ -46,6 +47,9 @@ public class GameManager : MonoBehaviour
     private bool _canClick = true;
 
     public float  matchDelay = 0.4f;
+    private int _comboCount = 0;
+    public int ComboThreshold = 3; // Number of consecutive matches to trigger a combo
+
 
     private void Start()
     {
@@ -63,6 +67,8 @@ public class GameManager : MonoBehaviour
         _firstSelectedCard = null;
         _secondSelectedCard = null;
         _canClick = true;
+        _comboCount = 0; // Reset combo count
+
 
         foreach (var card in _cards)
         {
@@ -148,6 +154,7 @@ public class GameManager : MonoBehaviour
             Logger.Log("not matched");
             _firstSelectedCard.Flip(false);
             _secondSelectedCard.Flip(false);
+            _comboCount = 0; // Reset combo count on mismatch
         }
 
         _firstSelectedCard = _secondSelectedCard = null;
@@ -161,7 +168,15 @@ public class GameManager : MonoBehaviour
         _secondSelectedCard.Match();
         _matches++;
 
+        _comboCount++; // Increase combo count
         AudioManager.Instance?.PlaySFX(Data.matchSound);
+
+
+        if (_comboCount >= ComboThreshold)
+        {
+            TriggerCombo(); // Call combo function
+        }
+
 
         if (_matches == _cards.Count / 2)
             OnGameWon();
@@ -194,5 +209,28 @@ public class GameManager : MonoBehaviour
         _isGameOver = true;
         resetButton.gameObject.SetActive(true);
         Logger.Log(message);
+    }
+    private void TriggerCombo()
+    {
+        Logger.Log("Combo Achieved!");
+        AudioManager.Instance?.PlaySFX(Data.comboSound); // Play combo sound effect
+        _comboCount = 0; // Reset combo count after triggering the combo
+
+        // Optional: Display combo message on UI
+        DisplayComboEffect();
+    }
+    private void DisplayComboEffect()
+    {
+        if (comboText != null)
+        {
+            comboText.text = "COMBO x3!";
+            comboText.gameObject.SetActive(true);
+            Invoke(nameof(HideComboEffect), 1.5f); // Hide after 1.5 seconds
+        }
+    }
+
+    private void HideComboEffect()
+    {
+        comboText.gameObject.SetActive(false);
     }
 }

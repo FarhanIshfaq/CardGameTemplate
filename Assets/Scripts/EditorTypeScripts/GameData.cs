@@ -11,4 +11,5 @@ public class GameData : ScriptableObject
     public AudioClip flipSound;
     public AudioClip matchSound;
     public AudioClip winSound;
+    public AudioClip comboSound;
 }
